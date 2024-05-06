@@ -18,6 +18,7 @@ class PostCreate_and_Update(PostBase):
 class PostRespose(PostBase):
     id : int
     created_at: datetime
+    user_id: int
     class Config:
         from_attributes = True
 
