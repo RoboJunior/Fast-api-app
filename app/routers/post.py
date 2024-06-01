@@ -4,7 +4,7 @@ from app.database import get_db
 from .. import models
 from app.schemas import PostCreate_and_Update, PostRespose
 from app import oauth2
-from typing import List
+from typing import List, Optional
 
 
 router = APIRouter(prefix="/posts",tags=["Posts"])
@@ -13,12 +13,12 @@ router = APIRouter(prefix="/posts",tags=["Posts"])
 
 
 @router.get("/", response_model=List[PostRespose])
-def get_post(db: Session = Depends(get_db), current_user: int = Depends(oauth2.get_current_user)):
+def get_post(db: Session = Depends(get_db), current_user: int = Depends(oauth2.get_current_user), search: Optional[str] = ""):
     # curr.execute("""SELECT * FROM posts;""")
     # posts = curr.fetchall()
     # print(posts)
     # Standard Sql operation
-    posts = db.query(models.Post).all()
+    posts = db.query(models.Post).filter(models.Post.title.contains(search)).all()
     return posts
 
 @router.post("/",status_code=status.HTTP_201_CREATED,response_model=PostRespose)
@@ -27,7 +27,6 @@ def create_post(post: PostCreate_and_Update, db: Session = Depends(get_db), curr
     # new_post = curr.fetchone()
     # conn.commit()
     # Standard Sql operation
-    print(current_user.id)
     new_post = models.Post(user_id=current_user.id, **post.dict())
     db.add(new_post)
     db.commit()
