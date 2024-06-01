@@ -17,7 +17,7 @@ class UserResponse(BaseModel):
 class PostBase(BaseModel):
     title: str
     content: str
-    published : bool = True
+    published : bool = True    
 
 class PostCreate_and_Update(PostBase):
     pass
@@ -27,6 +27,12 @@ class PostRespose(PostBase):
     created_at: datetime
     user_id: int
     user: UserResponse
+    class Config:
+        from_attributes = True
+
+class PostOut(BaseModel):
+    Post: PostRespose
+    votes: int
     class Config:
         from_attributes = True
 
