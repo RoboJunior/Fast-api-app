@@ -1,16 +1,15 @@
-from fastapi import Response, status, HTTPException, Depends, APIRouter
+from fastapi import Response, status, HTTPException, Depends, APIRouter, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from app.database import get_db
 from .. import models
 from app.schemas import PostCreate_and_Update, PostRespose, PostOut
 from app import oauth2
-from typing import List, Optional
+from typing import List, Optional, Annotated
 from sqlalchemy import func
+import base64
 
 
 router = APIRouter(prefix="/posts",tags=["Posts"])
-
-
 
 
 @router.get("/", response_model=List[PostOut])
@@ -19,17 +18,50 @@ def get_post(db: Session = Depends(get_db), current_user: int = Depends(oauth2.g
     # posts = curr.fetchall()
     # print(posts)
     # Standard Sql operation
-    results = db.query(models.Post, func.count(models.Post.id).label("votes")).join(models.Votes, models.Post.id == models.Votes.post_id, isouter=True).group_by(models.Post.id).filter(models.Post.title.contains(search)).all()
-
+    results = (
+    db.query(
+        models.Post,
+        func.count(models.Post.id).label("votes"),
+        models.Comment.id.label("comment_id"),
+        models.Comment.content.label("comment"),
+        models.User.email.label("commented_by")
+    )
+    .outerjoin(models.Votes, models.Post.id == models.Votes.post_id)
+    .outerjoin(models.Comment, models.Post.id == models.Comment.post_id)
+    .outerjoin(models.User, models.Comment.user_id == models.User.id)
+    .filter(models.Post.title.contains(search))
+    .group_by(models.Post.id, models.Comment.id, models.User.email).all())
     return results
 
-@router.post("/",status_code=status.HTTP_201_CREATED,response_model=PostRespose)
-def create_post(post: PostCreate_and_Update, db: Session = Depends(get_db), current_user: int = Depends(oauth2.get_current_user)):
-    # curr.execute("""INSERT INTO posts (title, content, published) VALUES (%s, %s, %s) RETURNING *""",(post.title,post.content,post.published))
-    # new_post = curr.fetchone()
-    # conn.commit()
-    # Standard Sql operation
-    new_post = models.Post(user_id=current_user.id, **post.dict())
+@router.post("/", status_code=status.HTTP_201_CREATED, response_model=PostRespose)
+async def create_post(
+    title: str = Form(...),
+    content: str = Form(...),
+    published: bool = Form(...),
+    file: Annotated[UploadFile, File()] = None,
+    db: Session = Depends(get_db),
+    current_user: int = Depends(oauth2.get_current_user)
+):
+    try:
+        post_data = PostCreate_and_Update(title=title, content=content, published=published)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid data: {e}")
+    print(file.filename)
+    if file:
+        content = await file.read()
+        base64_bytes = base64.b64encode(content)
+        base64_string = base64_bytes.decode('utf-8')
+        new_post = models.Post(
+            user_id=current_user.id,
+            **post_data.dict(),
+            image=base64_string
+        )
+    else:
+        new_post = models.Post(
+            user_id=current_user.id,
+            **post_data.dict(),
+            image="No image uploaded"
+            )
     db.add(new_post)
     db.commit()
     db.refresh(new_post)
@@ -41,7 +73,17 @@ def get_post(id: int, db: Session = Depends(get_db), current_user: int = Depends
     # post = curr.fetchone()
     # conn.commit()
     # Standard Sql operation
-    post = db.query(models.Post, func.count(models.Post.id).label("votes")).join(models.Votes, models.Post.id == models.Votes.post_id, isouter=True).group_by(models.Post.id).filter(models.Post.id == id).first()
+    post = (
+    db.query(
+        models.Post,
+        func.count(models.Post.id).label("votes"),
+        models.Comment.content.label("comment"),
+        models.User.email.label("commented_by"),
+        models.Comment.created_at.label("created_at")
+    )
+    .outerjoin(models.Votes, models.Post.id == models.Votes.post_id)
+    .outerjoin(models.Comment, models.Post.id == models.Comment.post_id)
+    .outerjoin(models.User, models.Comment.user_id == models.User.id)).group_by(models.Post.id, models.Comment.id, models.User.email).first()
     if not post:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"post with id : {id} does not exist")
 

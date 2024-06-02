@@ -26,6 +26,7 @@ class PostRespose(PostBase):
     id : int
     created_at: datetime
     user_id: int
+    image: Optional[str] = None
     user: UserResponse
     class Config:
         from_attributes = True
@@ -33,6 +34,9 @@ class PostRespose(PostBase):
 class PostOut(BaseModel):
     Post: PostRespose
     votes: int
+    comment: Optional[str] = None
+    commented_by: Optional[str] = None
+    created_at: Optional[datetime] = None
     class Config:
         from_attributes = True
 
@@ -58,9 +62,10 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     id : Optional[str] = None
 
-
 class Vote(BaseModel):
     post_id: int
     like: Literal[0,1]
 
-
+class Comment(BaseModel):
+    post_id: int
+    comment: Optional[str] = None
